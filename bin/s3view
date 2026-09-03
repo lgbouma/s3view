@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Run s3view straight from a checkout, from any working directory.
+# -u keeps the startup banner (and its token) unbuffered when redirected.
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec env PYTHONPATH="$here${PYTHONPATH:+:$PYTHONPATH}" python3 -u -m s3view "$@"

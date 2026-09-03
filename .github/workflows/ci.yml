@@ -1,0 +1,80 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          # s3view is developed on macOS; keep one job honest about it.
+          - os: macos-latest
+            python-version: "3.12"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      - name: Run tests
+        # No AWS credentials anywhere: the suite runs entirely against an
+        # in-memory S3 with synthetic FITS and ASDF files.
+        run: python -m pytest -q
+
+      - name: Check the CLI starts
+        run: |
+          s3view --version
+          python -c "import s3view.server, s3view.fitsview, s3view.asdfview"
+
+  degraded:
+    # The optional dependencies are meant to degrade gracefully; prove it by
+    # installing none of them and checking the app still imports and starts.
+    name: without optional dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install with botocore only
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Start with no optional extras
+        run: |
+          python - <<'PY'
+          from s3view.server import _capabilities
+          from s3view import thumbs
+          caps = _capabilities()
+          print("capabilities:", caps)
+          assert caps["fits"] is False, "astropy absent, so fits must report off"
+          assert caps["asdf"] is False, "pyyaml absent, so asdf must report off"
+          assert thumbs.can_thumb("x.png") is False, "no Pillow, no raster thumbnails"
+          print("degrades cleanly")
+          PY
+          s3view --version

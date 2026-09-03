@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=77"]  # PEP 639 license expressions
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "s3view"
+version = "0.1.0"
+description = "Fast, lightweight S3 browser with true video streaming and remote FITS/ASDF previews"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Luke Bouma", email = "bouma.luke@gmail.com" }]
+keywords = ["s3", "astronomy", "fits", "asdf", "quicklook", "streaming", "browser"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: System :: Filesystems",
+]
+dependencies = ["botocore>=1.29"]
+
+[project.urls]
+Homepage = "https://github.com/lgbouma/s3view"
+Repository = "https://github.com/lgbouma/s3view"
+Issues = "https://github.com/lgbouma/s3view/issues"
+
+[project.optional-dependencies]
+images = ["pillow"]
+fits = ["astropy", "numpy"]
+asdf = ["pyyaml", "numpy"]
+all = ["pillow", "astropy", "numpy", "pyyaml", "matplotlib"]
+test = ["pytest", "pillow", "astropy", "numpy", "pyyaml"]
+
+[project.scripts]
+s3view = "s3view.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["s3view*"]
+
+[tool.setuptools.package-data]
+s3view = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

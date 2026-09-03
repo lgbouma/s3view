@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>s3view</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <h1>Bookmarks</h1>
+    <div class="side-sec" id="marks"></div>
+    <h1>Buckets</h1>
+    <input id="bucketFilter" placeholder="filter buckets" spellcheck="false">
+    <div class="side-sec grow" id="buckets"></div>
+  </aside>
+
+  <main id="main">
+    <div id="bar">
+      <button id="up" title="Parent folder (⌘↑)">↑</button>
+      <button id="back" title="Back">‹</button>
+      <button id="fwd" title="Forward">›</button>
+      <div id="crumbs"></div>
+      <input id="pathinput" spellcheck="false" hidden>
+      <button id="copypath" title="Copy this s3:// path (⌘⇧C)">⧉</button>
+      <input id="filter" placeholder="filter  (/)" spellcheck="false">
+      <button id="deep" title="Recursive search of this prefix">search…</button>
+      <button id="viewList" class="on" title="List view">≡</button>
+      <button id="viewGrid" title="Gallery view">▦</button>
+      <button id="star" title="Bookmark this prefix">☆</button>
+      <button id="reload" title="Reload (⌘R)">↻</button>
+    </div>
+
+    <div id="head">
+      <span data-sort="name">Name</span>
+      <span class="num" data-sort="size">Size</span>
+      <span data-sort="mtime">Modified</span>
+    </div>
+
+    <div id="scroll"><div id="sizer"></div></div>
+
+    <div id="status">
+      <span id="stat"></span>
+      <span class="grow"></span>
+      <span id="perf" class="pill"></span>
+    </div>
+  </main>
+</div>
+
+<div id="ov">
+  <div id="ovbox">
+    <div id="ovhead">
+      <span id="ovtitle"></span>
+      <button id="ovprev" title="Previous (←)">‹</button>
+      <button id="ovnext" title="Next (→)">›</button>
+      <button id="ovdl">Download</button>
+      <button id="ovcopy">Copy URL</button>
+      <button id="ovclose" title="Close (esc)">✕</button>
+    </div>
+    <div id="ovbody"></div>
+    <div id="ovfoot"></div>
+  </div>
+</div>
+
+<script>window.S3VIEW_TOKEN = "__TOKEN__";</script>
+<script src="/static/app.js"></script>
+</body>
+</html>
