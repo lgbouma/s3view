@@ -107,15 +107,6 @@ Array previews share one interface: choose the HDU or array, a stretch
 Containers the browser cannot decode (mkv, avi) offer **Open in player**, which
 hands the presigned URL to IINA or VLC — still streaming, never downloading.
 
-## The path bar
-
-The breadcrumb doubles as an address bar. Click the empty strip to the right of
-it (or press `⌘L`) and it becomes a selectable text field containing the full
-`s3://bucket/prefix/` URI, already selected — drag-select and `⌘C`, or just
-`⌘C` straight away. Paste a different `s3://…` path and press Enter to jump
-there. The `⧉` button next to it copies the current path in one click, and
-`⌘⇧C` does the same from the keyboard.
-
 ## Configuration
 
 `~/.config/s3view/config.json`, written on first run. Set `start` to open
@@ -167,8 +158,6 @@ are exercised and checked against each other for identical pixels.
 CI runs on Python 3.10–3.13 on Linux plus macOS, and a separate job installs
 *only* botocore to prove the optional dependencies really do degrade gracefully
 rather than crashing.
-
-
 
 ## Why it is fast
 
