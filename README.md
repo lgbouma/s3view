@@ -8,17 +8,10 @@ A fast, lightweight S3 browser for scientific data. It behaves like a file
 manager — click through prefixes, preview things, hit space bar — but it
 **streams instead of downloading**.
 
-That distinction is the whole point. Most GUI S3 clients pull an entire object
-before they will show you anything, which makes them unusable for the sort of
-data that piles up in object storage: 200 MB detector frames, multi-gigabyte
-movies, prefixes with tens of thousands of files. s3view reads only the bytes it
-needs, using HTTP range requests.
+Compatible with: FITS, ASDF, movies, standard image formats, PDFs, standard
+text formats.
 
-For astronomers specifically, it gives you **quicklooks of FITS and ASDF images
-sitting in S3 without downloading them** — a 200 MB frame renders in a couple of
-seconds off a few MB of scattered reads. It is the missing "just let me look at
-it" step between `aws s3 ls` and pulling data down to disk.
-
+Run from command line:
 ```
 s3view                          # open your default location
 s3view s3://bucket/prefix/      # open somewhere specific
@@ -94,6 +87,89 @@ knows you can reach (bookmarked, or the one you are in) to the sidebar and marks
 it with a `·`. To reach one for the first time, either pass it on the command
 line or press `⌘L` and type the `s3://` path, then bookmark it with ☆.
 
+## What it previews
+
+| type | how |
+|---|---|
+| **FITS** (`.fits`, `.fit`, `.fts`, `.fz`) | strided ranged reads; HDU picker, stretch, colormap, resolution, full header text |
+| **ASDF** (`.asdf`) | same, driven by the YAML tree and block index; pick any named array (`roman.data`, `roman.err`, `roman.dq`, …) and read the tree |
+| mp4 / mov / webm / m4v | streamed from S3 by range request, with a running "~X MB transferred" readout |
+| png / jpg / gif / webp / tif | presigned direct load; server-side thumbnail for formats the browser cannot decode |
+| txt / json / yaml / cfg / param / log / py / csv | first 256 KB via one ranged read |
+| pdf | presigned, in an iframe |
+| anything else | metadata plus a download link |
+
+Array previews share one interface: choose the HDU or array, a stretch
+(`zscale`, `asinh`, `log`, `99.5%`, `minmax`), a colormap, and a resolution from
+256 to 1024 px. The footer always reports what it actually read — e.g.
+`2.1 s · read ~8.4 MB of 191 MB (4.2%)` — so the cost is never hidden from you.
+
+Containers the browser cannot decode (mkv, avi) offer **Open in player**, which
+hands the presigned URL to IINA or VLC — still streaming, never downloading.
+
+## The path bar
+
+The breadcrumb doubles as an address bar. Click the empty strip to the right of
+it (or press `⌘L`) and it becomes a selectable text field containing the full
+`s3://bucket/prefix/` URI, already selected — drag-select and `⌘C`, or just
+`⌘C` straight away. Paste a different `s3://…` path and press Enter to jump
+there. The `⧉` button next to it copies the current path in one click, and
+`⌘⇧C` does the same from the keyboard.
+
+## Configuration
+
+`~/.config/s3view/config.json`, written on first run. Set `start` to open
+somewhere by default:
+
+```json
+{
+  "start": "s3://your-bucket/your/prefix/",
+  "bookmarks": [
+    {"name": "your-prefix", "uri": "s3://your-bucket/your/prefix/"}
+  ],
+  "profile": null,
+  "region": null,
+  "endpoint_url": null,
+  "page_size": 1000,
+  "presign_expires": 3600,
+  "external_player": "IINA"
+}
+```
+
+`start` accepts any `s3://bucket/prefix/`; leave it `null` for the bucket picker.
+`s3view --set-start s3://bucket/prefix/` writes it for you, and ☆ manages
+bookmarks. No bucket names are baked into the source.
+
+## Security
+
+The server binds `127.0.0.1` only, and every API call requires a token generated
+fresh at startup and carried in the URL it opens. Without this, any web page you
+happened to have open could quietly read your buckets through localhost.
+Requests arriving with a foreign `Origin` header are rejected.
+
+Presigned URLs default to one-hour expiry and are minted only for objects you
+actually open. **Copy URL** puts one on your clipboard deliberately — treat it
+as a password for that object until it expires.
+
+## Development
+
+```bash
+pip install -e ".[test]"
+pytest
+```
+
+The suite needs **no AWS credentials and no network**. It builds synthetic FITS
+and ASDF files in memory and serves them through a fake S3 that records every
+ranged read, so the tests can assert on *how much* was fetched — the property
+the whole program exists to protect. Both the contiguous and strided read paths
+are exercised and checked against each other for identical pixels.
+
+CI runs on Python 3.10–3.13 on Linux plus macOS, and a separate job installs
+*only* botocore to prove the optional dependencies really do degrade gracefully
+rather than crashing.
+
+
+
 ## Why it is fast
 
 **Video and audio never pass through this program.** The page is handed a
@@ -132,103 +208,6 @@ empty one.
 **Thumbnails are lazy and rate-limited.** Only tiles actually on screen are
 requested, three at a time, cached on disk under `~/.cache/s3view`. Array
 thumbnails in gallery view cost megabytes each, so they sit behind a toggle.
-
-## What it previews
-
-| type | how |
-|---|---|
-| **FITS** (`.fits`, `.fit`, `.fts`, `.fz`) | strided ranged reads; HDU picker, stretch, colormap, resolution, full header text |
-| **ASDF** (`.asdf`) | same, driven by the YAML tree and block index; pick any named array (`roman.data`, `roman.err`, `roman.dq`, …) and read the tree |
-| mp4 / mov / webm / m4v | streamed from S3 by range request, with a running "~X MB transferred" readout |
-| png / jpg / gif / webp / tif | presigned direct load; server-side thumbnail for formats the browser cannot decode |
-| txt / json / yaml / cfg / param / log / py / csv | first 256 KB via one ranged read |
-| pdf | presigned, in an iframe |
-| anything else | metadata plus a download link |
-
-Array previews share one interface: choose the HDU or array, a stretch
-(`zscale`, `asinh`, `log`, `99.5%`, `minmax`), a colormap, and a resolution from
-256 to 1024 px. The footer always reports what it actually read — e.g.
-`2.1 s · read ~8.4 MB of 191 MB (4.2%)` — so the cost is never hidden from you.
-
-Containers the browser cannot decode (mkv, avi) offer **Open in player**, which
-hands the presigned URL to IINA or VLC — still streaming, never downloading.
-
-## The path bar
-
-The breadcrumb doubles as an address bar. Click the empty strip to the right of
-it (or press `⌘L`) and it becomes a selectable text field containing the full
-`s3://bucket/prefix/` URI, already selected — drag-select and `⌘C`, or just
-`⌘C` straight away. Paste a different `s3://…` path and press Enter to jump
-there. The `⧉` button next to it copies the current path in one click, and
-`⌘⇧C` does the same from the keyboard.
-
-## Keyboard
-
-| key | action |
-|---|---|
-| `↑` `↓` | move selection |
-| `Enter` / `→` | open folder, or preview file |
-| `←` / `⌘↑` | parent folder |
-| `Space` | preview (and play/pause inside a video) |
-| `←` `→` in preview | previous / next file |
-| `Esc` | close preview |
-| `/` | focus the filter box |
-| `⌘L` | edit / select the current s3:// path |
-| `⌘⇧C` | copy the current s3:// path |
-| `⌘R` | reload the listing |
-
-Double-click opens, like a file manager. The filter box narrows what is already
-loaded; **search…** runs a recursive server-side scan of the current prefix
-under a key and time budget.
-
-## Configuration
-
-`~/.config/s3view/config.json`, written on first run:
-
-```json
-{
-  "start": null,
-  "bookmarks": [],
-  "profile": null,
-  "region": null,
-  "endpoint_url": null,
-  "page_size": 1000,
-  "presign_expires": 3600,
-  "external_player": "IINA"
-}
-```
-
-`start` is where s3view opens; leave it `null` to get the bucket picker. The ☆
-button bookmarks the current prefix, and `--set-start` writes the default. No
-bucket names are baked into the source.
-
-## Security
-
-The server binds `127.0.0.1` only, and every API call requires a token generated
-fresh at startup and carried in the URL it opens. Without this, any web page you
-happened to have open could quietly read your buckets through localhost.
-Requests arriving with a foreign `Origin` header are rejected.
-
-Presigned URLs default to one-hour expiry and are minted only for objects you
-actually open. **Copy URL** puts one on your clipboard deliberately — treat it
-as a password for that object until it expires.
-
-## Development
-
-```bash
-pip install -e ".[test]"
-pytest
-```
-
-The suite needs **no AWS credentials and no network**. It builds synthetic FITS
-and ASDF files in memory and serves them through a fake S3 that records every
-ranged read, so the tests can assert on *how much* was fetched — the property
-the whole program exists to protect. Both the contiguous and strided read paths
-are exercised and checked against each other for identical pixels.
-
-CI runs on Python 3.10–3.13 on Linux plus macOS, and a separate job installs
-*only* botocore to prove the optional dependencies really do degrade gracefully
-rather than crashing.
 
 ## Known limitations
 
