@@ -29,25 +29,26 @@ step, no `npm install`.
 
 **Recommended — clone and put it on your PATH.** This runs under whichever
 `python3` you normally use, so it picks up the scientific stack you already have
-installed:
+installed. Clone it wherever you keep code; `/my/preferred/dir` below is just a
+placeholder for that directory:
 
 ```bash
-git clone git@github.com:lgbouma/s3view.git ~/src/s3view
-echo 'export PATH="$HOME/src/s3view/bin:$PATH"' >> ~/.bashrc   # or ~/.zshrc
+git clone git@github.com:lgbouma/s3view.git /my/preferred/dir/s3view
+echo 'export PATH="/my/preferred/dir/s3view/bin:$PATH"' >> ~/.bashrc   # or ~/.zshrc
 exec $SHELL
 ```
 
 **Or symlink it** into a directory already on your PATH:
 
 ```bash
-ln -s ~/src/s3view/bin/s3view ~/.local/bin/s3view
+ln -s /my/preferred/dir/s3view/bin/s3view ~/.local/bin/s3view
 ```
 
 **Or install it as a package** into your existing environment, which gives you
 an `s3view` console script:
 
 ```bash
-pip install -e ~/src/s3view
+pip install -e /my/preferred/dir/s3view
 ```
 
 A note on isolated installers: `pipx install` and `uv tool install` put s3view in
@@ -56,7 +57,7 @@ environment, so FITS/ASDF and thumbnails silently switch off. If you want that
 isolation, ask for the extras explicitly:
 
 ```bash
-pipx install '~/src/s3view[all]'
+pipx install '/my/preferred/dir/s3view[all]'
 ```
 
 ### Optional dependencies
