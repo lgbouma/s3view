@@ -4,7 +4,7 @@
 [![python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-A fast, lightweight S3 browser for scientific data. It behaves like a file
+A fast, lightweight S3 browser for astronomy. It behaves like a file
 manager — click through prefixes, preview things, hit space bar — but it
 **streams instead of downloading**.
 
