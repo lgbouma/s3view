@@ -23,11 +23,6 @@ On first run, with nothing configured, it lists your buckets and lets you pick.
 
 ![s3view browsing a night of pipeline products: a 191 MB FITS frame previewed from ~8 MB of ranged reads, an ASDF array, gallery thumbnails, and a 900-object prefix](https://raw.githubusercontent.com/lgbouma/s3view/main/docs/demo.gif)
 
-*The real program on invented data: a browser driving the actual server,
-recorded by `tools/record_demo.py`, so every byte count in the footer is one the
-code produced. The stand-in S3 is in memory, throttled to 12 MB/s so the times
-mean something.*
-
 ## Installation
 
 You almost certainly already have the only hard requirement: **Python 3.9+ and
