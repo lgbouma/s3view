@@ -21,6 +21,13 @@ s3view --set-start s3://bucket/prefix/    # remember that as the default
 It starts a local server, opens your browser and prints a URL. `Ctrl-C` quits.
 On first run, with nothing configured, it lists your buckets and lets you pick.
 
+![s3view browsing a night of pipeline products: a 191 MB FITS frame previewed from ~8 MB of ranged reads, an ASDF array, gallery thumbnails, and a 900-object prefix](https://raw.githubusercontent.com/lgbouma/s3view/main/docs/demo.gif)
+
+*The real program on invented data: a browser driving the actual server,
+recorded by `tools/record_demo.py`, so every byte count in the footer is one the
+code produced. The stand-in S3 is in memory, throttled to 12 MB/s so the times
+mean something.*
+
 ## Installation
 
 You almost certainly already have the only hard requirement: **Python 3.9+ and
@@ -159,6 +166,14 @@ are exercised and checked against each other for identical pixels.
 CI runs on Python 3.10–3.13 on Linux plus macOS, and a separate job installs
 *only* botocore to prove the optional dependencies really do degrade gracefully
 rather than crashing.
+
+To re-record the README animation (needs `playwright` and `ffmpeg`, neither of
+them a runtime dependency):
+
+```bash
+pip install playwright && playwright install chromium
+python tools/record_demo.py            # -> docs/demo.gif
+```
 
 ## Why it is fast
 
