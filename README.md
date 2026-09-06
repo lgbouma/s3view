@@ -1,5 +1,6 @@
 # s3view
 
+[![PyPI](https://img.shields.io/pypi/v/s3view)](https://pypi.org/project/s3view/)
 [![tests](https://github.com/lgbouma/s3view/actions/workflows/ci.yml/badge.svg)](https://github.com/lgbouma/s3view/actions/workflows/ci.yml)
 [![python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -29,53 +30,25 @@ On first run, with nothing configured, it lists your buckets and lets you pick.
 uv tool install 's3view[all]'
 ```
 
-One command, no clone, and nothing added to the environments you work in.
-`[all]` brings the preview stack with it — astropy, numpy, Pillow, matplotlib,
-PyYAML — so every feature is on from the first run. Python 3.10+; no boto3, no
-web framework, no build step, no `npm install`.
+Python 3.10+, and no boto3, web framework or build step. `[all]` adds the
+preview stack — astropy, numpy, Pillow, matplotlib, PyYAML — so every feature
+is on from the first run; leave it off and `botocore` is the only dependency,
+with the rest degrading gracefully. `pipx install` and `pip install` take the
+same argument, and `uvx 's3view[all]' s3://bucket/prefix/` runs it without
+installing anything.
 
-To try it without installing anything at all:
-
-```bash
-uvx 's3view[all]' s3://bucket/prefix/
-```
-
-Or use whichever packaging tool you already have:
-
-```bash
-pipx install 's3view[all]'
-pip install 's3view[all]'
-```
-
-Leave the `[all]` off for a minimal install. `botocore` is the only hard
-dependency; everything the extras would have added degrades gracefully, and
-s3view tells you at launch what is live (`thumbnails:on  fits:on`). The one
-combination to avoid is an isolated install *without* the extras: a `pipx` or
-`uv tool` environment cannot see the astropy and Pillow in your normal
-environment, so FITS, ASDF and thumbnails quietly switch off.
-
-### Running from a checkout
-
-For development, or if you would rather s3view used the scientific stack you
-have already built than carry its own copy of it:
+Or run it from a checkout, which is the way to develop on it and the way to
+have it use a scientific stack you have already built:
 
 ```bash
 git clone git@github.com:lgbouma/s3view.git /my/preferred/dir/s3view
 echo 'export PATH="/my/preferred/dir/s3view/bin:$PATH"' >> ~/.bashrc   # or ~/.zshrc
-exec $SHELL
 ```
 
-`bin/s3view` runs the checkout under whichever `python3` is first on your PATH.
-That is the point — it inherits your stack — but it also means that environment
-needs `botocore`, and a per-project virtualenv frequently does not even when
-your usual environment does. If the wrong interpreter wins, name the right one:
-
-```bash
-export S3VIEW_PYTHON="$HOME/envs/astro/bin/python"
-```
-
-`pip install -e /my/preferred/dir/s3view` is the same idea with a console
-script instead of a PATH entry, and edits still take effect immediately.
+`bin/s3view` runs under whichever `python3` is first on your PATH, so that
+environment needs `botocore` — a per-project virtualenv often does not have it,
+even when your usual environment does. Set `S3VIEW_PYTHON` to name a different
+interpreter.
 
 ### Optional dependencies
 
