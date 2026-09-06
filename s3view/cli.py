@@ -7,7 +7,7 @@ import threading
 import webbrowser
 
 from s3view import __version__, config
-from s3view.server import Server
+from s3view._deps import require_botocore
 
 
 def _port_free(port):
@@ -49,6 +49,12 @@ def main(argv=None):
     p.add_argument("--set-start", action="store_true", help="save URI as the default start location")
     p.add_argument("--version", action="version", version="s3view " + __version__)
     args = p.parse_args(argv)
+
+    # After parsing, so that --help and --version answer even in an
+    # environment that cannot run the server. Server is imported here rather
+    # than at module scope for the same reason: importing it pulls in botocore.
+    require_botocore()
+    from s3view.server import Server
 
     cfg = config.load()
     for key, val in (

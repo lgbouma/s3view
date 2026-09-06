@@ -2,4 +2,10 @@
 # Run s3view straight from a checkout, from any working directory.
 # -u keeps the startup banner (and its token) unbuffered when redirected.
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-exec env PYTHONPATH="$here${PYTHONPATH:+:$PYTHONPATH}" python3 -u -m s3view "$@"
+
+# python3 by default, so the checkout inherits the scientific stack of whatever
+# environment you work in. Set S3VIEW_PYTHON when that environment is the wrong
+# one -- a project virtualenv without botocore, most often.
+py="${S3VIEW_PYTHON:-python3}"
+
+exec env PYTHONPATH="$here${PYTHONPATH:+:$PYTHONPATH}" "$py" -u -m s3view "$@"

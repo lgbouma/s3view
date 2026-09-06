@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "s3view"
-version = "0.1.0"
+dynamic = ["version"]  # single source: s3view/__init__.py
 description = "Fast, lightweight S3 browser with true video streaming and remote FITS/ASDF previews"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -37,6 +37,9 @@ test = ["pytest", "pillow", "astropy", "numpy", "pyyaml"]
 
 [project.scripts]
 s3view = "s3view.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "s3view.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["s3view*"]

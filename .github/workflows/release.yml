@@ -1,0 +1,84 @@
+name: release
+
+# Publishing is driven by a tag: push v0.1.0 and this builds, checks and
+# uploads that version to PyPI. workflow_dispatch does everything except the
+# upload, so a release can be rehearsed without burning a version number
+# (PyPI never lets a version be reused, even after a delete).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build and check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install build tooling
+        run: python -m pip install --upgrade pip build twine
+
+      - name: Check the tag matches s3view.__version__
+        # The version lives in s3view/__init__.py and pyproject reads it from
+        # there, so a mistyped tag is the one way the two can still disagree.
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(python -c 'import s3view; print(s3view.__version__)')"
+          echo "tag=$tag  package=$pkg"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match s3view.__version__ ($pkg)"
+            exit 1
+          fi
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Check the metadata renders on PyPI
+        run: python -m twine check --strict dist/*
+
+      - name: Install the wheel and start the CLI
+        # Catches the packaging mistakes the test suite cannot see: a missing
+        # static/ directory, a broken console script, an unstated dependency.
+        run: |
+          python -m venv /tmp/fresh
+          /tmp/fresh/bin/pip install --upgrade pip
+          /tmp/fresh/bin/pip install dist/*.whl
+          /tmp/fresh/bin/s3view --version
+          /tmp/fresh/bin/python -c "
+          import importlib.resources as r
+          for name in ('index.html', 'style.css', 'app.js'):
+              assert (r.files('s3view') / 'static' / name).is_file(), name
+          print('static files packaged')
+          "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: publish to PyPI
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/s3view
+    permissions:
+      id-token: write  # trusted publishing: no API token to store or rotate
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

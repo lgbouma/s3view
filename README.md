@@ -25,14 +25,39 @@ On first run, with nothing configured, it lists your buckets and lets you pick.
 
 ## Installation
 
-You almost certainly already have the only hard requirement: **Python 3.9+ and
-`botocore`**, which ships with the AWS CLI. No boto3, no web framework, no build
-step, no `npm install`.
+```bash
+uv tool install 's3view[all]'
+```
 
-**Recommended — clone and put it on your PATH.** This runs under whichever
-`python3` you normally use, so it picks up the scientific stack you already have
-installed. Clone it wherever you keep code; `/my/preferred/dir` below is just a
-placeholder for that directory:
+One command, no clone, and nothing added to the environments you work in.
+`[all]` brings the preview stack with it — astropy, numpy, Pillow, matplotlib,
+PyYAML — so every feature is on from the first run. Python 3.10+; no boto3, no
+web framework, no build step, no `npm install`.
+
+To try it without installing anything at all:
+
+```bash
+uvx 's3view[all]' s3://bucket/prefix/
+```
+
+Or use whichever packaging tool you already have:
+
+```bash
+pipx install 's3view[all]'
+pip install 's3view[all]'
+```
+
+Leave the `[all]` off for a minimal install. `botocore` is the only hard
+dependency; everything the extras would have added degrades gracefully, and
+s3view tells you at launch what is live (`thumbnails:on  fits:on`). The one
+combination to avoid is an isolated install *without* the extras: a `pipx` or
+`uv tool` environment cannot see the astropy and Pillow in your normal
+environment, so FITS, ASDF and thumbnails quietly switch off.
+
+### Running from a checkout
+
+For development, or if you would rather s3view used the scientific stack you
+have already built than carry its own copy of it:
 
 ```bash
 git clone git@github.com:lgbouma/s3view.git /my/preferred/dir/s3view
@@ -40,32 +65,22 @@ echo 'export PATH="/my/preferred/dir/s3view/bin:$PATH"' >> ~/.bashrc   # or ~/.z
 exec $SHELL
 ```
 
-**Or symlink it** into a directory already on your PATH:
+`bin/s3view` runs the checkout under whichever `python3` is first on your PATH.
+That is the point — it inherits your stack — but it also means that environment
+needs `botocore`, and a per-project virtualenv frequently does not even when
+your usual environment does. If the wrong interpreter wins, name the right one:
 
 ```bash
-ln -s /my/preferred/dir/s3view/bin/s3view ~/.local/bin/s3view
+export S3VIEW_PYTHON="$HOME/envs/astro/bin/python"
 ```
 
-**Or install it as a package** into your existing environment, which gives you
-an `s3view` console script:
-
-```bash
-pip install -e /my/preferred/dir/s3view
-```
-
-A note on isolated installers: `pipx install` and `uv tool install` put s3view in
-its own virtualenv, where it *cannot see* the astropy and Pillow in your normal
-environment, so FITS/ASDF and thumbnails silently switch off. If you want that
-isolation, ask for the extras explicitly:
-
-```bash
-pipx install '/my/preferred/dir/s3view[all]'
-```
+`pip install -e /my/preferred/dir/s3view` is the same idea with a console
+script instead of a PATH entry, and edits still take effect immediately.
 
 ### Optional dependencies
 
-Everything below degrades gracefully — s3view starts and tells you at launch
-which features are live (`thumbnails:on  fits:on`).
+Everything below degrades gracefully, and the launch banner says which of them
+are live.
 
 | package | enables |
 |---|---|
@@ -161,6 +176,24 @@ are exercised and checked against each other for identical pixels.
 CI runs on Python 3.10–3.13 on Linux plus macOS, and a separate job installs
 *only* botocore to prove the optional dependencies really do degrade gracefully
 rather than crashing.
+
+### Releasing
+
+Version lives in one place, `s3view/__init__.py`; `pyproject.toml` reads it
+from there. To cut a release, bump it, commit, then:
+
+```bash
+git tag v0.1.1 && git push origin v0.1.1
+```
+
+The `release` workflow builds the sdist and wheel, refuses the tag if it
+disagrees with `s3view.__version__`, installs the wheel into a clean
+environment and starts the CLI from it, then uploads to PyPI through [trusted
+publishing](https://docs.pypi.org/trusted-publishers/) — there is no API token
+anywhere in the repository or its secrets. Running the workflow by hand
+(`workflow_dispatch`) does everything except the upload, which is the way to
+rehearse a release: PyPI never allows a version number to be reused, even after
+the file is deleted.
 
 To re-record the README animation (needs `playwright` and `ffmpeg`, neither of
 them a runtime dependency):
