@@ -82,3 +82,7 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A re-pushed tag or a re-run job then skips files PyPI already
+          # holds instead of failing; a genuinely new version still uploads.
+          skip-existing: true

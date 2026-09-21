@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "s3view"
 dynamic = ["version"]  # single source: s3view/__init__.py
-description = "Fast, lightweight S3 browser with true video streaming and remote FITS/ASDF previews"
+description = "Fast, lightweight browser for astronomy data on S3, over SSH, or on disk: streams video, previews FITS/ASDF by byte range"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"

@@ -226,7 +226,7 @@ Version lives in one place, `s3view/__init__.py`; `pyproject.toml` reads it
 from there. To cut a release, bump it, commit, then:
 
 ```bash
-git tag v0.1.1 && git push origin v0.1.1
+git tag v0.2.1 && git push origin v0.2.1
 ```
 
 The `release` workflow builds the sdist and wheel, refuses the tag if it
