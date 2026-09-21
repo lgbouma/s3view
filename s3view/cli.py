@@ -38,23 +38,23 @@ def main(argv=None):
         description="Fast, lightweight S3 browser: streams video, previews FITS, "
                     "never downloads what it does not need.",
     )
-    p.add_argument("uri", nargs="?", help="s3://bucket/prefix/ to open (default: configured start)")
+    p.add_argument("uri", nargs="?",
+                   help="location to open (default: configured start). "
+                        "s3://bucket/prefix/, ssh://user@host/path/, "
+                        "user@host:/path/, or a local directory")
     p.add_argument("-p", "--port", type=int, default=0, help="port (default: an unused one)")
     p.add_argument("--profile", help="AWS profile")
     p.add_argument("--region", help="AWS region")
     p.add_argument("--endpoint-url", help="custom S3 endpoint (MinIO, R2, Ceph, ...)")
     p.add_argument("--page-size", type=int, help="objects fetched per listing page")
+    p.add_argument("--ssh-option", action="append", metavar="OPT", dest="ssh_options",
+                   help="extra argument passed to ssh, repeatable; glue the value on "
+                        "so it stays one word, e.g. --ssh-option=-oProxyJump=bastion")
     p.add_argument("-n", "--no-open", action="store_true", help="do not open a browser")
     p.add_argument("-v", "--verbose", action="store_true", help="log requests")
     p.add_argument("--set-start", action="store_true", help="save URI as the default start location")
     p.add_argument("--version", action="version", version="s3view " + __version__)
     args = p.parse_args(argv)
-
-    # After parsing, so that --help and --version answer even in an
-    # environment that cannot run the server. Server is imported here rather
-    # than at module scope for the same reason: importing it pulls in botocore.
-    require_botocore()
-    from s3view.server import Server
 
     cfg = config.load()
     for key, val in (
@@ -62,16 +62,26 @@ def main(argv=None):
         ("region", args.region),
         ("endpoint_url", args.endpoint_url),
         ("page_size", args.page_size),
+        ("ssh_options", args.ssh_options),
     ):
         if val:
             cfg[key] = val
     if args.uri:
-        cfg["start"] = args.uri if args.uri.startswith("s3://") else "s3://" + args.uri
+        cfg["start"] = config.normalize_uri(args.uri)
         if args.set_start:
             saved = config.load()
             saved["start"] = cfg["start"]
             config.save(saved)
             print("default start location saved: %s" % cfg["start"])
+
+    # After parsing, so that --help and --version answer even in an environment
+    # that cannot run the server -- and only when S3 is actually where we are
+    # going, since an ssh:// or file:// session needs neither botocore nor
+    # credentials. Server is imported here for the same reason.
+    start = cfg.get("start")
+    if not start or config.scheme_of(config.parse_uri(start)[0]) == "s3":
+        require_botocore()
+    from s3view.server import Server
 
     if args.port:
         if not _port_free(args.port):

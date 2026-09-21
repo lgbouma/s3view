@@ -2,9 +2,12 @@
 
 Design notes
 ------------
-* Media never proxies through Python. ``/api/url`` hands the browser a
-  presigned S3 URL and the ``<video>`` element does its own range requests
-  straight to S3, so seeking in a 700 MB movie costs a few hundred KB.
+* Media does not proxy through Python when it does not have to. For S3,
+  ``/api/url`` hands the browser a presigned URL and the ``<video>`` element
+  range-requests S3 directly, so seeking in a 700 MB movie costs a few
+  hundred KB. Transports with no such URL to give -- ssh://, file:// -- get
+  ``/api/object`` instead, which preserves the browser's range requests and
+  merely terminates them here.
 * Bound to 127.0.0.1 and gated behind a per-run token, because any web page
   you have open could otherwise reach a plain localhost server and read your
   buckets.
@@ -24,7 +27,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from s3view import __version__, asdfview, config, fitsview, thumbs
-from s3view.s3client import S3
+from s3view.store import Store
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
@@ -170,6 +173,17 @@ class Handler(BaseHTTPRequestHandler):
         cfg = self.server.config
         one = lambda k, d=None: q.get(k, [d])[0]  # noqa: E731
 
+        def prefix_of(name="prefix"):
+            """A prefix names a folder, so it ends in "/" or is empty.
+
+            Enforced here rather than trusted from the client because every
+            key in a listing is built as prefix + name: one missing slash
+            yields "dir/subfile.mp4", a listing that still looks correct, and
+            previews that all fail to load.
+            """
+            value = one(name, "") or ""
+            return value + "/" if value and not value.endswith("/") else value
+
         if route == "config":
             return self._json(
                 {
@@ -190,7 +204,7 @@ class Handler(BaseHTTPRequestHandler):
             bucket = one("bucket")
             if not bucket:
                 return self._error(400, "bucket required")
-            prefix = one("prefix", "") or ""
+            prefix = prefix_of()
             token = one("token")
             limit = int(one("limit", cfg.get("page_size", 1000)))
             page = s3.list_page(bucket, prefix, token, limit)
@@ -201,7 +215,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if route == "search":
             bucket = one("bucket")
-            prefix = one("prefix", "") or ""
+            prefix = prefix_of()
             query = one("q", "") or ""
             if not bucket or not query:
                 return self._error(400, "bucket and q required")
@@ -223,8 +237,15 @@ class Handler(BaseHTTPRequestHandler):
             bucket, key = one("bucket"), one("key")
             if not bucket or not key:
                 return self._error(400, "bucket and key required")
+            download = bool(one("download"))
+            if config.scheme_of(bucket) != "s3":
+                # Nothing off S3 can be handed to the browser directly, so hand
+                # it this server's own ranged proxy instead. The element still
+                # issues the range requests; they just end here.
+                return self._json({"url": self._object_url(bucket, key, download),
+                                   "expires_in": None, "proxied": True})
             disp = None
-            if one("download"):
+            if download:
                 name = key.rsplit("/", 1)[-1].replace('"', "")
                 disp = 'attachment; filename="%s"' % name
             url = s3.presign(bucket, key, expires=int(cfg.get("presign_expires", 3600)),
@@ -301,7 +322,11 @@ class Handler(BaseHTTPRequestHandler):
             app = one("app") or cfg.get("external_player") or "VLC"
             if not bucket or not key:
                 return self._error(400, "bucket and key required")
-            url = s3.presign(bucket, key, expires=int(cfg.get("presign_expires", 3600)))
+            if config.scheme_of(bucket) == "s3":
+                url = s3.presign(bucket, key,
+                                 expires=int(cfg.get("presign_expires", 3600)))
+            else:
+                url = self._object_url(bucket, key)
             try:
                 subprocess.Popen(["open", "-a", app, url],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -339,8 +364,21 @@ class Handler(BaseHTTPRequestHandler):
 
         return self._error(404, "no such endpoint: " + route)
 
+    def _object_url(self, bucket, key, download=False):
+        """This server's own URL for an object, for transports without presigning.
+
+        Absolute rather than relative because it also goes to the clipboard and
+        to external players, and carries the token because /api/ is gated -- it
+        is exactly as sensitive as a presigned URL, and expires with the run.
+        """
+        params = {"bucket": bucket, "key": key, "t": self.server.token}
+        if download:
+            params["download"] = "1"
+        return "http://127.0.0.1:%d/api/object?%s" % (
+            self.server.server_address[1], urllib.parse.urlencode(params))
+
     def _proxy(self, q, head_only=False):
-        """Range-preserving passthrough for media the browser can't presign-load."""
+        """Range-preserving passthrough: the only path for ssh:// and file://."""
         s3 = self.server.s3
         bucket = q.get("bucket", [None])[0]
         key = q.get("key", [None])[0]
@@ -361,6 +399,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Accept-Ranges", "bytes")
         if resp.get("ContentRange"):
             self.send_header("Content-Range", resp["ContentRange"])
+        if q.get("download", [None])[0]:
+            self.send_header("Content-Disposition", 'attachment; filename="%s"'
+                             % key.rsplit("/", 1)[-1].replace('"', ""))
         self.end_headers()
         if head_only:
             body.close()
@@ -386,14 +427,18 @@ class Server(ThreadingHTTPServer):
         self.config = cfg
         self.verbose = verbose
         self.token = secrets.token_urlsafe(24)
-        self.s3 = S3(
-            profile=cfg.get("profile"),
-            region=cfg.get("region"),
-            endpoint_url=cfg.get("endpoint_url"),
-            page_size=cfg.get("page_size", 1000),
-        )
+        # A router, not a client: which transport answers is decided per
+        # request by the root in it, and backends are built on first use.
+        self.s3 = Store(cfg)
         self.capabilities = _capabilities()
         self._lock = threading.Lock()
+
+    def server_close(self):
+        try:
+            self.s3.close()  # ends any ssh subprocesses this run started
+        except Exception:
+            pass
+        super().server_close()
 
 
 def _capabilities():

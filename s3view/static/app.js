@@ -2,9 +2,10 @@
  *
  * Two ideas carry most of the weight here:
  *   1. Nothing large is ever fetched through this page. Video, audio, images
- *      and PDFs are loaded from short-lived presigned S3 URLs, so the browser
- *      issues its own HTTP range requests and seeking a 700 MB movie costs a
- *      few hundred KB rather than 700 MB.
+ *      and PDFs are loaded from a URL the browser range-requests itself -- a
+ *      short-lived presigned URL on S3, s3view's own ranged proxy on ssh://
+ *      and file:// -- so seeking a 700 MB movie costs a few hundred KB
+ *      rather than 700 MB.
  *   2. Both views are virtualized against a fixed row height, so a prefix with
  *      100k keys renders the same handful of DOM nodes as one with 10.
  */
@@ -76,7 +77,45 @@ function glyph(e) { return e.type === "dir" ? GLYPH.dir : (GLYPH[e.kind] || GLYP
 function baseName(k) { const p = k.replace(/\/$/, "").split("/"); return p[p.length - 1]; }
 
 /* ----------------------------------------------------------- navigation */
-function uri(bucket, prefix) { return "s3://" + bucket + "/" + (prefix || ""); }
+/* A root is an S3 bucket ("my-bucket"), a host ("ssh://user@host") or this
+ * machine ("file://"); keys hang off it identically in all three cases, which
+ * is why nothing past these three functions has to know which it has. */
+const SCHEME_RE = /^([a-z][a-z0-9+.\-]*):\/\/(.*)$/i;
+
+function schemeOf(root) {
+  const m = SCHEME_RE.exec(root || "");
+  return m ? m[1].toLowerCase() : "s3";
+}
+
+function uri(bucket, prefix) {
+  if (!bucket) return "";
+  const base = SCHEME_RE.test(bucket) ? bucket : "s3://" + bucket;
+  return base + "/" + (prefix || "");
+}
+
+/* Must agree with config.parse_uri in Python, key for key. In particular a
+ * non-empty prefix always ends in "/": listings build every key as
+ * prefix + name, so a missing slash silently yields "…/moviesfile.mp4" —
+ * folders that still look right and previews that all 404. */
+function splitUri(u) {
+  const m = SCHEME_RE.exec(u || "");
+  const scheme = m ? m[1].toLowerCase() : "s3";
+  let rest = m ? m[2] : (u || "");
+  let root, tail;
+  if (scheme === "file") {
+    root = "file://";
+    tail = rest;
+  } else {
+    if (scheme === "s3") rest = rest.replace(/^\/+/, "");
+    const i = rest.indexOf("/");
+    root = i < 0 ? rest : rest.slice(0, i);
+    if (scheme !== "s3") root = scheme + "://" + root;
+    tail = i < 0 ? "" : rest.slice(i + 1);
+  }
+  tail = tail.replace(/^\/+/, "");
+  if (tail && !tail.endsWith("/")) tail += "/";
+  return [root, tail];
+}
 
 async function navigate(bucket, prefix, push = true) {
   if (push) {
@@ -296,7 +335,8 @@ function showBucketPicker() {
   if (!S.buckets.length) {
     wrap.textContent =
       "No start location is configured, and no buckets could be listed. " +
-      "Pass one on the command line, e.g.  s3view s3://your-bucket/prefix/";
+      "Pass one on the command line, e.g.  s3view s3://your-bucket/prefix/  " +
+      "or  s3view user@host:/data/night1/";
     sizer.replaceChildren(wrap);
     return;
   }
@@ -378,7 +418,11 @@ function renderSide() {
   const known = new Set(S.buckets.map((b) => b.name));
   const extra = [];
   const addExtra = (name) => {
-    if (name && !known.has(name)) { known.add(name); extra.push(name); }
+    // ssh:// and file:// roots are not buckets and do not belong in this list;
+    // they are reached from a bookmark or the address bar.
+    if (name && schemeOf(name) === "s3" && !known.has(name)) {
+      known.add(name); extra.push(name);
+    }
   };
   S.marks.forEach((m) => addExtra(splitUri(m.uri)[0]));
   addExtra(S.bucket);
@@ -414,12 +458,6 @@ function renderSide() {
   });
 }
 
-function splitUri(u) {
-  const rest = u.replace(/^s3:\/\//, "");
-  const i = rest.indexOf("/");
-  return i < 0 ? [rest, ""] : [rest.slice(0, i), rest.slice(i + 1)];
-}
-
 function setStatus() {
   if (!S.bucket) { $("#stat").textContent = ""; $("#perf").textContent = ""; return; }
   const nd = S.folders.length, nf = S.files.length;
@@ -445,9 +483,7 @@ function maybeLoadMore() {
 }
 
 /* ------------------------------------------------------- copyable path */
-function currentUri() {
-  return S.bucket ? "s3://" + S.bucket + "/" + (S.prefix || "") : "";
-}
+function currentUri() { return uri(S.bucket, S.prefix); }
 
 async function copyText(text) {
   try {
@@ -577,8 +613,9 @@ async function previewMedia(e, body, foot) {
 
   const gauge = txt("");
   const hint = txt("");
+  const from = schemeOf(S.bucket) === "s3" ? "S3" : schemeOf(S.bucket);
   foot.replaceChildren(
-    txt(fmtSize(e.size) + " · streaming from S3, not downloaded"), gauge, hint
+    txt(fmtSize(e.size) + " · streaming from " + from + ", not downloaded"), gauge, hint
   );
   const update = () => {
     if (!el.duration || !isFinite(el.duration) || !el.buffered.length) return;

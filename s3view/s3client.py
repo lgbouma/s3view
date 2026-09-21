@@ -7,18 +7,14 @@ first-class so nothing ever downloads a whole object just to look at it.
 
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 
 import botocore.session
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
-# Shared pool for listing prefetch and other background work.
-POOL = ThreadPoolExecutor(max_workers=16, thread_name_prefix="s3view")
-
-# Strided reads get their own pool so a big FITS preview cannot starve listing
-# prefetch (and vice versa).
-RANGE_POOL = ThreadPoolExecutor(max_workers=48, thread_name_prefix="s3view-range")
+# Transport-agnostic, so these live with the routing layer and are shared with
+# the ssh:// and file:// backends. Re-exported because this is where they were.
+from s3view.store import POOL, RANGE_POOL, TTLCache  # noqa: F401
 
 # Ranged reads bypass botocore entirely: we presign the object once and then
 # issue plain pooled HTTPS GETs with a Range header (a presigned signature
@@ -33,39 +29,6 @@ try:
 except Exception:  # pragma: no cover - urllib3 ships with botocore
     urllib3 = None
     _HTTP = None
-
-
-class TTLCache:
-    """Small thread-safe TTL + LRU cache."""
-
-    def __init__(self, maxsize=512, ttl=90.0):
-        self.maxsize = maxsize
-        self.ttl = ttl
-        self._d = {}
-        self._lock = threading.Lock()
-
-    def get(self, key):
-        with self._lock:
-            hit = self._d.get(key)
-            if hit is None:
-                return None
-            expires, value = hit
-            if expires < time.time():
-                self._d.pop(key, None)
-                return None
-            return value
-
-    def put(self, key, value):
-        with self._lock:
-            if len(self._d) >= self.maxsize:
-                # Drop the soonest-to-expire entries; cheap and good enough here.
-                for k in sorted(self._d, key=lambda k: self._d[k][0])[: self.maxsize // 4]:
-                    self._d.pop(k, None)
-            self._d[key] = (time.time() + self.ttl, value)
-
-    def clear(self):
-        with self._lock:
-            self._d.clear()
 
 
 class S3:
@@ -205,7 +168,7 @@ class S3:
     def list_buckets(self):
         try:
             resp = self._client().list_buckets()
-        except ClientError:
+        except Exception:  # no credentials at all is as ordinary as a denial
             return []
         return [
             {"name": b["Name"], "created": b["CreationDate"].timestamp()}
@@ -325,3 +288,6 @@ class S3:
             kwargs["Range"] = byte_range
         resp = self.client_for(bucket).get_object(**kwargs)
         return resp
+
+    def close(self):
+        pass

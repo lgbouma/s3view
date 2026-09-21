@@ -15,7 +15,7 @@ import os
 import struct
 
 from s3view import config
-from s3view.s3client import POOL
+from s3view.store import POOL
 
 BLOCK = 2880  # FITS logical record size
 CARD = 80
